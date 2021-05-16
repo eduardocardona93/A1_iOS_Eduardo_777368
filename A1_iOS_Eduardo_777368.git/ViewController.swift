@@ -14,12 +14,16 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
     var currentLocation: CLLocationCoordinate2D? = nil
     var locationsCount = 0
     var locationsLabels = ["A","B","C"]
+
     var points:[LocationPoint] = []
     
+    @IBOutlet weak var navigationBtn: UIButton!
     @IBOutlet weak var mapKit: MKMapView!
     override func viewDidLoad() {
         
         super.viewDidLoad()
+        
+        navigationBtn.isHidden = true
         mapKit.showsUserLocation = true // show user location
         mapKit.isZoomEnabled = false// disable zoom
         
@@ -39,8 +43,42 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
         
         mapKit.delegate = self
     }
+    //MARK: - Event handler Functions
     
+    @IBAction func drawRoute(_ sender: Any) {
+        mapKit.removeOverlays(mapKit.overlays)
+        for (index, point) in points.enumerated(){
+            
+            
+            let sourcePlaceMark = MKPlacemark(coordinate: point.coordinates)
+            var nextPointIndex:Int = index + 1
+            if nextPointIndex  == points.count{
+                nextPointIndex = 0
+            }
+            let destinationPlaceMark = MKPlacemark(coordinate: points[nextPointIndex].coordinates)
+            
+            // request a direction
+            let directionRequest = MKDirections.Request()
+            
+            // assign the source and destination properties of the request
+            directionRequest.source = MKMapItem(placemark: sourcePlaceMark)
+            directionRequest.destination = MKMapItem(placemark: destinationPlaceMark)
+            
+            // transportation type
+            directionRequest.transportType = .automobile
+            
+            // calculate the direction
+            let directions = MKDirections(request: directionRequest)
+            directions.calculate { (response, error) in
+                guard let directionResponse = response else {return}
+                // create the route
+                let route = directionResponse.routes[0]
+                // drawing a polyline
+                self.mapKit.addOverlay(route.polyline, level: .aboveRoads)
     
+            }
+        }
+    }
     //MARK: - Obj C Functions
     
     // Long press gesture recognizer for the annotation
@@ -63,12 +101,13 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
         
         let newLocation: CLLocation =  CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         // get distance to current location
-        let distanceKM = Double( newLocation.distance(from: CLLocation(latitude: currentLocation!.latitude, longitude: currentLocation!.longitude)) ) / 1000
+        let distanceKM = Double( newLocation.distance(from: CLLocation(latitude: currentLocation!.latitude, longitude: currentLocation!.longitude)) ) / 1000.0
         CLGeocoder().reverseGeocodeLocation(newLocation) { (placemarks, error) in
             if error != nil {
                 print(error!)
             } else {
                 if let placemark = placemarks?[0] {
+                    print(placemark.locality!)
                     if placemark.country != "Canada"{
                         let alert = UIAlertController(title: "Error", message: "This point is not in located Canada, please try again", preferredStyle: .alert)
                         alert.addAction(UIAlertAction(title: "OK", style: UIAlertAction.Style.default, handler: nil))
@@ -77,27 +116,36 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
                         let alert = UIAlertController(title: "Error", message: "This point is not located in Ontario, please try again", preferredStyle: .alert)
                         alert.addAction(UIAlertAction(title: "OK", style: UIAlertAction.Style.default, handler: nil))
                         self.present(alert, animated: true, completion: nil)
-                   } else if placemark.subAdministrativeArea == nil || placemark.subAdministrativeArea == "" {
+                   } else if placemark.locality == nil || placemark.locality == "" {
                     
                         let alert = UIAlertController(title: "Error", message: "This point is not available to select, please try again", preferredStyle: .alert)
                         alert.addAction(UIAlertAction(title: "OK", style: UIAlertAction.Style.default, handler: nil))
                         self.present(alert, animated: true, completion: nil)
-                   }else if self.getIndexByCity(citySearch: placemark.subAdministrativeArea! ) > -1{
-                        let alreadySelectedLocation = self.getIndexByCity(citySearch: placemark.subAdministrativeArea! )
+                   }else if self.getIndexByCity(citySearch: placemark.locality! ) > -1{
+                        let alreadySelectedLocation = self.getIndexByCity(citySearch: placemark.locality! )
                         self.removePin(title: self.points[alreadySelectedLocation].letter)
-                        self.points[alreadySelectedLocation] = LocationPoint(cityName: placemark.subAdministrativeArea ?? "", coordinates: coordinate, distanceToLocation: distanceKM, letter: self.locationsLabels[alreadySelectedLocation])
-                    self.addAnnotation(coordinate: coordinate, title: self.points[alreadySelectedLocation].letter, subtitle: "" )
+                        self.points[alreadySelectedLocation] = LocationPoint(cityName: placemark.locality ?? "", coordinates: coordinate, distanceToLocation: distanceKM, letter: self.locationsLabels[alreadySelectedLocation])
+                        self.addAnnotation(coordinate: coordinate, title: self.points[alreadySelectedLocation].letter, subtitle: "" )
                    }else{
-                        if self.points.count >= 3  {
+                        self.navigationBtn.isHidden = true
+                        if self.points.count == 3  {
                             self.mapKit.removeAnnotations(self.mapKit.annotations)
+                            self.mapKit.removeOverlays(self.mapKit.overlays)
                             self.points.removeAll()
+                            self.addAnnotation(coordinate: self.currentLocation!, title: "Current Location", subtitle: "" )
                         }
                             
-                        let newPoint = LocationPoint(cityName: placemark.subAdministrativeArea ?? "", coordinates: coordinate, distanceToLocation: distanceKM, letter: self.locationsLabels[self.points.count])
+                        let newPoint = LocationPoint(cityName: placemark.locality ?? "", coordinates: coordinate, distanceToLocation: distanceKM, letter: self.locationsLabels[self.points.count])
                         self.points.append(newPoint)
                         self.addAnnotation(coordinate: coordinate, title: newPoint.letter, subtitle: "" )
-                            
-                            
+                                
+                        if(self.points.count == 3){
+                            let coordinates = self.points.map {$0.coordinates}
+                            let polygon = MKPolygon(coordinates: coordinates, count: coordinates.count)
+                            self.mapKit.addOverlay(polygon)
+                            self.navigationBtn.isHidden = false
+                            self.calculateDistances()
+                        }
                         
                     }
                 }
@@ -110,8 +158,8 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
         let latitude = userLocation.coordinate.latitude
         let longitude = userLocation.coordinate.longitude
         
-        let latDelta: CLLocationDegrees = 1
-        let lngDelta: CLLocationDegrees = 1
+        let latDelta: CLLocationDegrees = 0.3
+        let lngDelta: CLLocationDegrees = 0.3
         
         let span = MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lngDelta)
         
@@ -120,10 +168,10 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
         currentLocation = location
         
         let region = MKCoordinateRegion(center: location, span: span)
-        
+        //
         mapKit.setRegion(region, animated: true)
         
-        addAnnotation(coordinate: location, title: "my location", subtitle: "you are here" )
+        addAnnotation(coordinate: location, title: "Current Location", subtitle: "" )
     }
     
     
@@ -164,6 +212,23 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
         }
     }
     
+    func calculateDistances(){
+        for (index, point) in points.enumerated(){
+            let pointLocation: CLLocation =  CLLocation(latitude: point.coordinates.latitude, longitude: point.coordinates.longitude)
+            
+            
+            var nextPointIndex:Int = index + 1
+            if nextPointIndex == points.count{
+                nextPointIndex = 0
+            }
+            let destinationPlaceMark = CLLocation(latitude: points[nextPointIndex].coordinates.latitude, longitude: points[nextPointIndex].coordinates.longitude)
+            
+            point.distanceToNextPoint = pointLocation.distance(from: destinationPlaceMark)/1000.0
+            
+
+            print(point.distanceToNextPoint)
+        }
+    }
 }
 
 //MARK: - MKMap Extension Class
@@ -174,31 +239,22 @@ extension ViewController: MKMapViewDelegate{
         if annotation is MKUserLocation {
             return nil
         }
+        let annotationView = MKPinAnnotationView(annotation: annotation, reuseIdentifier: "droppablePin" + annotation.title!!)
+        annotationView.animatesDrop = true
+        annotationView.canShowCallout = true
+        annotationView.rightCalloutAccessoryView = UIButton(type: .detailDisclosure)
         
         switch annotation.title {
             case "A":
-                let annotationView = MKPinAnnotationView(annotation: annotation, reuseIdentifier: "droppablePinA")
-                annotationView.animatesDrop = true
                 annotationView.pinTintColor = UIColor.systemPink
-                annotationView.canShowCallout = true
-                annotationView.rightCalloutAccessoryView = UIButton(type: .detailDisclosure)
-
                 return annotationView
             case "B":
                 let annotationView = MKPinAnnotationView(annotation: annotation, reuseIdentifier: "droppablePinB")
-                annotationView.animatesDrop = true
                 annotationView.pinTintColor = UIColor.orange
-                annotationView.canShowCallout = true
-                annotationView.rightCalloutAccessoryView = UIButton(type: .detailDisclosure)
-
                 return annotationView
             case "C":
                 let annotationView = MKPinAnnotationView(annotation: annotation, reuseIdentifier: "droppablePinC")
-                annotationView.animatesDrop = true
                 annotationView.pinTintColor = UIColor.cyan
-                annotationView.canShowCallout = true
-                annotationView.rightCalloutAccessoryView = UIButton(type: .detailDisclosure)
-
                 return annotationView
             default:
                 return nil
@@ -219,17 +275,19 @@ extension ViewController: MKMapViewDelegate{
     // Rendrer for overlay func
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
         if overlay is MKPolyline {
-            let rendrer = MKPolylineRenderer(overlay: overlay)
-            rendrer.strokeColor = UIColor.red
-            rendrer.lineWidth = 1
-            return rendrer
+            let renderer = MKPolylineRenderer(overlay: overlay)
+            renderer.strokeColor = UIColor.red
+            renderer.lineWidth = 1
+            renderer.polyline.accessibilityLabel?.append("aaaaaa")
+            return renderer
         } else if overlay is MKPolygon {
-            let rendrer = MKPolygonRenderer(overlay: overlay)
-            rendrer.fillColor = UIColor.red.withAlphaComponent(0.5)
-            rendrer.strokeColor = UIColor.green
-            rendrer.lineWidth = 2
-            return rendrer
+            let renderer = MKPolygonRenderer(overlay: overlay)
+            renderer.fillColor = UIColor.red.withAlphaComponent(0.5)
+            renderer.strokeColor = UIColor.green
+            renderer.lineWidth = 2
+            return renderer
         }
         return MKOverlayRenderer()
     }
+    
 }
