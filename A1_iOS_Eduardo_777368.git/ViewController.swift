@@ -12,8 +12,8 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
     // define location manager
     var locationManager = CLLocationManager()
     var currentLocation: CLLocationCoordinate2D? = nil
-    var locationsCount = 0
     var locationsLabels = ["A","B","C"]
+    var locationsPolygon:MKPolygon? = nil
 
     var points:[LocationPoint] = []
     
@@ -38,9 +38,7 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
         doubleTap.numberOfTapsRequired = 2 // taps required definition
         mapKit.addGestureRecognizer(doubleTap) // add the gesture recognizer to the map
         // ------------ Long press gesture recognizer definition -----------
-        let uilpgr = UILongPressGestureRecognizer(target: self, action: #selector(addLongPressAnnotattion))
-        mapKit.addGestureRecognizer(uilpgr)
-        
+      
         mapKit.delegate = self
     }
     //MARK: - Event handler Functions
@@ -80,13 +78,7 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
         }
     }
     //MARK: - Obj C Functions
-    
-    // Long press gesture recognizer for the annotation
-    @objc func addLongPressAnnotattion(gestureRecognizer: UIGestureRecognizer) {
-        let touchPoint = gestureRecognizer.location(in: mapKit)
-        let coordinate = mapKit.convert(touchPoint, toCoordinateFrom: mapKit)
-        getLocation(coordinate: coordinate)
-    }
+
     @objc func dropPin(sender: UITapGestureRecognizer) {
         let touchPoint = sender.location(in: mapKit)
         let coordinate = mapKit.convert(touchPoint, toCoordinateFrom: mapKit)
@@ -121,31 +113,48 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
                         let alert = UIAlertController(title: "Error", message: "This point is not available to select, please try again", preferredStyle: .alert)
                         alert.addAction(UIAlertAction(title: "OK", style: UIAlertAction.Style.default, handler: nil))
                         self.present(alert, animated: true, completion: nil)
-                   }else if self.getIndexByCity(citySearch: placemark.locality! ) > -1{
-                        let alreadySelectedLocation = self.getIndexByCity(citySearch: placemark.locality! )
-                        self.removePin(title: self.points[alreadySelectedLocation].letter)
-                        self.points[alreadySelectedLocation] = LocationPoint(cityName: placemark.locality ?? "", coordinates: coordinate, distanceToLocation: distanceKM, letter: self.locationsLabels[alreadySelectedLocation])
-                        self.addAnnotation(coordinate: coordinate, title: self.points[alreadySelectedLocation].letter, subtitle: "" )
+                   }else if self.checkPointCloserToAnother(newCoordinate: coordinate) > -1 {
+                        let closerLocation = self.checkPointCloserToAnother(newCoordinate: coordinate)
+                        self.removePin(title: self.points[closerLocation].letter)
+                        self.points.remove(at: closerLocation)
+                        self.mapKit.removeOverlays(self.mapKit.overlays)
+                    self.navigationBtn.isHidden = true
                    }else{
                         self.navigationBtn.isHidden = true
                         if self.points.count == 3  {
-                            self.mapKit.removeAnnotations(self.mapKit.annotations)
-                            self.mapKit.removeOverlays(self.mapKit.overlays)
-                            self.points.removeAll()
-                            self.addAnnotation(coordinate: self.currentLocation!, title: "Current Location", subtitle: "" )
-                        }
+                            let renderer = MKPolylineRenderer(overlay: self.locationsPolygon!)
+                            if renderer.path.contains(renderer.point(for:MKMapPoint(coordinate))) {
+                                let alert = UIAlertController(title: "Error", message: "This point is inside the polygon, please try again", preferredStyle: .alert)
+                                alert.addAction(UIAlertAction(title: "OK", style: UIAlertAction.Style.default, handler: nil))
+                                self.present(alert, animated: true, completion: nil)
+                            }else{
+                                self.mapKit.removeAnnotations(self.mapKit.annotations)
+                                self.mapKit.removeOverlays(self.mapKit.overlays)
+                                self.points.removeAll()
+                            }
+   
                             
-                        let newPoint = LocationPoint(cityName: placemark.locality ?? "", coordinates: coordinate, distanceToLocation: distanceKM, letter: self.locationsLabels[self.points.count])
-                        self.points.append(newPoint)
-                        self.addAnnotation(coordinate: coordinate, title: newPoint.letter, subtitle: "" )
-                                
+                        }
+                        for point in self.locationsLabels{
+                            let index = self.getIndexByLetter(letterSearch: point)
+                            if index == -1 {
+                                let newPoint = LocationPoint(cityName: placemark.locality ?? "", coordinates: coordinate, distanceToLocation: distanceKM, letter: point)
+                                self.points.append(newPoint)
+                                self.addAnnotation(coordinate: coordinate, title: point, subtitle: "" )
+                                break
+                            }
+                        }
                         if(self.points.count == 3){
                             let coordinates = self.points.map {$0.coordinates}
-                            let polygon = MKPolygon(coordinates: coordinates, count: coordinates.count)
-                            self.mapKit.addOverlay(polygon)
+                            self.locationsPolygon = MKPolygon(coordinates: coordinates, count: coordinates.count)
+                            self.mapKit.addOverlay(self.locationsPolygon!)
                             self.navigationBtn.isHidden = false
-                            self.calculateDistances()
+                            self.setDistances()
                         }
+
+
+                                
+
                         
                     }
                 }
@@ -158,8 +167,8 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
         let latitude = userLocation.coordinate.latitude
         let longitude = userLocation.coordinate.longitude
         
-        let latDelta: CLLocationDegrees = 0.3
-        let lngDelta: CLLocationDegrees = 0.3
+        let latDelta: CLLocationDegrees = 0.2
+        let lngDelta: CLLocationDegrees = 0.2
         
         let span = MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lngDelta)
         
@@ -195,14 +204,6 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
         return -1
     }
     
-    func getIndexByCity(citySearch: String) -> Int{
-        for (index, point) in points.enumerated() {
-            if point.cityName == citySearch {
-                return index
-            }
-        }
-        return -1
-    }
     
     func removePin(title:String) {
         for annotation in mapKit.annotations {
@@ -212,7 +213,7 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
         }
     }
     
-    func calculateDistances(){
+    func setDistances(){
         for (index, point) in points.enumerated(){
             let pointLocation: CLLocation =  CLLocation(latitude: point.coordinates.latitude, longitude: point.coordinates.longitude)
             
@@ -224,10 +225,25 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
             let destinationPlaceMark = CLLocation(latitude: points[nextPointIndex].coordinates.latitude, longitude: points[nextPointIndex].coordinates.longitude)
             
             point.distanceToNextPoint = pointLocation.distance(from: destinationPlaceMark)/1000.0
+            let coordy = CLLocationCoordinate2D(latitude:  (point.coordinates.latitude + points[nextPointIndex].coordinates.latitude)/2, longitude: CLLocationDegrees(point.coordinates.longitude + points[nextPointIndex].coordinates.longitude)/2)
             
-
+            addAnnotation(coordinate: coordy, title: "Distance", subtitle: point.letter + " to " + points[nextPointIndex].letter + " " + String(format: "%.2f", point.distanceToNextPoint) + " km")
             print(point.distanceToNextPoint)
         }
+    }
+    
+    func checkPointCloserToAnother(newCoordinate:CLLocationCoordinate2D) -> Int {
+        var iCloser = -1
+        let newPoint : CLLocation =  CLLocation(latitude: newCoordinate.latitude, longitude: newCoordinate.longitude)
+        for (index , point) in points.enumerated(){
+            let pointLocation: CLLocation =  CLLocation(latitude: point.coordinates.latitude, longitude: point.coordinates.longitude)
+            let distance = newPoint.distance(from: pointLocation)/1000.0
+
+            if( distance <= 2.0){
+                iCloser = index
+            }
+        }
+        return iCloser
     }
 }
 
@@ -239,6 +255,7 @@ extension ViewController: MKMapViewDelegate{
         if annotation is MKUserLocation {
             return nil
         }
+        
         let annotationView = MKPinAnnotationView(annotation: annotation, reuseIdentifier: "droppablePin" + annotation.title!!)
         annotationView.animatesDrop = true
         annotationView.canShowCallout = true
@@ -249,15 +266,15 @@ extension ViewController: MKMapViewDelegate{
                 annotationView.pinTintColor = UIColor.systemPink
                 return annotationView
             case "B":
-                let annotationView = MKPinAnnotationView(annotation: annotation, reuseIdentifier: "droppablePinB")
                 annotationView.pinTintColor = UIColor.orange
                 return annotationView
             case "C":
-                let annotationView = MKPinAnnotationView(annotation: annotation, reuseIdentifier: "droppablePinC")
                 annotationView.pinTintColor = UIColor.cyan
                 return annotationView
             default:
-                return nil
+                let annotationView = MKAnnotationView(annotation: annotation, reuseIdentifier: "distance" + annotation.title!!)
+
+                return annotationView
         }
     }
     // Callout accessory control tapped
@@ -276,9 +293,8 @@ extension ViewController: MKMapViewDelegate{
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
         if overlay is MKPolyline {
             let renderer = MKPolylineRenderer(overlay: overlay)
-            renderer.strokeColor = UIColor.red
+            renderer.strokeColor = UIColor.purple
             renderer.lineWidth = 1
-            renderer.polyline.accessibilityLabel?.append("aaaaaa")
             return renderer
         } else if overlay is MKPolygon {
             let renderer = MKPolygonRenderer(overlay: overlay)
