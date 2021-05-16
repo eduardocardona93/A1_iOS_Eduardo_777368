@@ -303,6 +303,7 @@ extension ViewController: MKMapViewDelegate{
             renderer.lineWidth = 2
             return renderer
         }
+        // return default
         return MKOverlayRenderer()
     }
     
