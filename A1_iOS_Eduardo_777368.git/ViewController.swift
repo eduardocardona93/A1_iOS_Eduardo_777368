@@ -77,10 +77,8 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
             let directions = MKDirections(request: directionRequest)
             directions.calculate { (response, error) in
                 guard let directionResponse = response else {return}
-                // creates the route
-                let route = directionResponse.routes[0]
-                // draws the polyline
-                self.mapKit.addOverlay(route.polyline, level: .aboveRoads)
+                let route = directionResponse.routes[0] // creates the route
+                self.mapKit.addOverlay(route.polyline, level: .aboveRoads) // draws the polyline
     
             }
         }
@@ -95,14 +93,27 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
         getLocation(coordinate: coordinate)
         
     }
+    
+    //MARK: - Location manager class functions
+    
+    // gets the current location and creates the annotation for it, as well as centers the map into the region closer to the location
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        let userLocation = locations[0] // gets the location of the user
+        let latitude = userLocation.coordinate.latitude // user latitude
+        let longitude = userLocation.coordinate.longitude // user longitude
+        let latDelta: CLLocationDegrees = 0.2 // latitude delta
+        let lngDelta: CLLocationDegrees = 0.2 // longitude delta
+        let span = MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lngDelta) // sets the span for the coordinates
+        currentLocation = CLLocationCoordinate2D(latitude: latitude, longitude: longitude) // sets the current location into the global variable
+        mapKit.setRegion(MKCoordinateRegion(center: currentLocation!, span: span), animated: true) // sets the region for the map
+        addAnnotation(coordinate: currentLocation!, title: "Current Location", subtitle: "" ) // sets the annotation
+    }
     //MARK: - Aux Functions
-
-
+    
+    // gets the location of the pin and sets the logic for the annotations and overlays
     func getLocation(coordinate: CLLocationCoordinate2D){
-        // creates the location as CLLocation
-        let newLocation: CLLocation =  CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        // get distance to current location
-        let distanceKM = Double( newLocation.distance(from: CLLocation(latitude: currentLocation!.latitude, longitude: currentLocation!.longitude)) ) / 1000.0
+        let newLocation: CLLocation =  CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude) // creates the location as CLLocation
+        let distanceKM = Double( newLocation.distance(from: CLLocation(latitude: currentLocation!.latitude, longitude: currentLocation!.longitude)) ) / 1000.0  // get distance to current location
         // gets the location placemark from the CLLocation variable and handles the result
         CLGeocoder().reverseGeocodeLocation(newLocation) { (placemarks, error) in
             if error != nil { // if there was an error
@@ -171,9 +182,9 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
                             if(self.points.count == 3){ // checks if there are 3 pinned points after all the process
                                 let coordinates = self.points.map {$0.coordinates} // gets all points coordinates
                                 self.locationsPolygon = MKPolygon(coordinates: coordinates, count: coordinates.count) // creates the polygon and sets it to the global variable
-                                self.mapKit.addOverlay(self.locationsPolygon!)
-                                self.navigationBtn.isHidden = false
-                                self.setDistances()
+                                self.mapKit.addOverlay(self.locationsPolygon!) // adds the overlay to the map
+                                self.navigationBtn.isHidden = false // shows the navigation button
+                                self.setDistances() // sets the distances between all the points
                             }
                         }
                    }
@@ -181,155 +192,125 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
             }
         }
     }
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        let userLocation = locations[0]
-        
-        let latitude = userLocation.coordinate.latitude
-        let longitude = userLocation.coordinate.longitude
-        
-        let latDelta: CLLocationDegrees = 0.2
-        let lngDelta: CLLocationDegrees = 0.2
-        
-        let span = MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lngDelta)
-        
-        let location = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-        
-        currentLocation = location
-        
-        let region = MKCoordinateRegion(center: location, span: span)
-        //
-        mapKit.setRegion(region, animated: true)
-        
-        addAnnotation(coordinate: location, title: "Current Location", subtitle: "" )
-    }
     
-    
-
-    
+    // creates an annotation depending on the coordinates
     func addAnnotation(coordinate: CLLocationCoordinate2D, title: String, subtitle: String ){
-        let annotation = MKPointAnnotation()
-        
-        annotation.title = title
-        annotation.subtitle = subtitle
-        annotation.coordinate = coordinate
-        mapKit.addAnnotation(annotation)
+        let annotation = MKPointAnnotation() // creates the point annotation object
+        annotation.title = title // sets the annotation title
+        annotation.subtitle = subtitle // sets the annotation subtitle
+        annotation.coordinate = coordinate // sets the annotation coordinate
+        mapKit.addAnnotation(annotation) // adds the annotation to the map
     }
-    
+    // gets the index of the points array by searching the letter/label
     func getIndexByLetter(letterSearch: String) -> Int{
-        for (index, point) in points.enumerated() {
-            if point.letter == letterSearch {
-                return index
+        for (index, point) in points.enumerated() { // iterates all the points
+            if point.letter == letterSearch { // validates if the point letter is the one searched
+                return index // returns the index found
             }
         }
-        return -1
+        return -1 // letter not found
     }
     
-    
+    // removes the desired annotation by its title/letter
     func removePin(title:String) {
-        for annotation in mapKit.annotations {
-            if annotation.title == title {
-                mapKit.removeAnnotation(annotation)
+        for annotation in mapKit.annotations { // iterates all pins
+            if annotation.title == title { // validates if the annotation title is the selected one
+                mapKit.removeAnnotation(annotation) // remove the annotation from the map
             }
         }
     }
-    
+    // sets the distances between all the points
     func setDistances(){
-        for (index, point) in points.enumerated(){
-            let pointLocation: CLLocation =  CLLocation(latitude: point.coordinates.latitude, longitude: point.coordinates.longitude)
-            
-            
-            var nextPointIndex:Int = index + 1
-            if nextPointIndex == points.count{
-                nextPointIndex = 0
+        for (index, point) in points.enumerated(){ // iterates all the points
+            let pointLocation: CLLocation =  CLLocation(latitude: point.coordinates.latitude, longitude: point.coordinates.longitude) // gets the current point CLLocation Object with the coordinates
+            var nextPointIndex:Int = index + 1 // get the next point
+            if nextPointIndex == points.count{ //validates if it is the last point
+                nextPointIndex = 0 // gets the first point
             }
-            let destinationPlaceMark = CLLocation(latitude: points[nextPointIndex].coordinates.latitude, longitude: points[nextPointIndex].coordinates.longitude)
+            let destinationPlaceMark = CLLocation(latitude: points[nextPointIndex].coordinates.latitude, longitude: points[nextPointIndex].coordinates.longitude) // gets the next point CLLocation Object with the coordinates
             
-            point.distanceToNextPoint = pointLocation.distance(from: destinationPlaceMark)/1000.0
+            point.distanceToNextPoint = pointLocation.distance(from: destinationPlaceMark)/1000.0 // sets the distance in km
+            
+            
+            // Todo:
             let coordy = CLLocationCoordinate2D(latitude:  (point.coordinates.latitude + points[nextPointIndex].coordinates.latitude)/2, longitude: CLLocationDegrees(point.coordinates.longitude + points[nextPointIndex].coordinates.longitude)/2)
-    
+            
             addAnnotation(coordinate: coordy, title: "Distance", subtitle: point.letter + " to " + points[nextPointIndex].letter + " " + String(format: "%.2f", point.distanceToNextPoint) + " km")
-            print(point.distanceToNextPoint)
         }
     }
-    
+    // gets the index of the closest point if it is located within 2km
     func checkPointCloserToAnother(newCoordinate:CLLocationCoordinate2D) -> Int {
-        var iCloser = -1
-        let newPoint : CLLocation =  CLLocation(latitude: newCoordinate.latitude, longitude: newCoordinate.longitude)
-        for (index , point) in points.enumerated(){
-            let pointLocation: CLLocation =  CLLocation(latitude: point.coordinates.latitude, longitude: point.coordinates.longitude)
-            let distance = newPoint.distance(from: pointLocation)/1000.0
-
-            if( distance <= 2.0){
-                iCloser = index
+        var iCloser = -1 // index definition
+        var minimumDistance = 2.0 // minimum distance definition
+        let newPoint : CLLocation =  CLLocation(latitude: newCoordinate.latitude, longitude: newCoordinate.longitude) // gets the new point CLLocation Object with the coordinates
+        for (index , point) in points.enumerated(){ // iterates all the coordinates
+            let pointLocation: CLLocation =  CLLocation(latitude: point.coordinates.latitude, longitude: point.coordinates.longitude) // gets the point CLLocation Object with the coordinates
+            let distance = newPoint.distance(from: pointLocation) / 1000.0 // gets the distance in km
+            if( distance <= minimumDistance){ // if the current distance is within the minimum distance
+                iCloser = index // gets the index of the point
+                minimumDistance = distance // sets the new minimum distance
             }
         }
-        return iCloser
+        return iCloser // returns the closest index
     }
 }
 
 //MARK: - MKMap Extension Class
-extension ViewController: MKMapViewDelegate{
+extension ViewController: MKMapViewDelegate {
     // ViewFor annotation method
     func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
         
-        if annotation is MKUserLocation {
-            return nil
+        if annotation is MKUserLocation { // if the annotation is the user location
+            return nil // return nothing
         }
         
-        let annotationView = MKPinAnnotationView(annotation: annotation, reuseIdentifier: "droppablePin" + annotation.title!!)
-        annotationView.animatesDrop = true
-        annotationView.canShowCallout = true
-        annotationView.rightCalloutAccessoryView = UIButton(type: .detailDisclosure)
-        
+        let annotationView = MKPinAnnotationView(annotation: annotation, reuseIdentifier: "droppablePin" + annotation.title!!) // create the annotation view
+        annotationView.animatesDrop = true // set true annotation animation
+        annotationView.canShowCallout = true // set true can show callout
+        annotationView.rightCalloutAccessoryView = UIButton(type: .detailDisclosure) // set callout button
+        // switch annotation title
         switch annotation.title {
             case "A":
-                annotationView.pinTintColor = UIColor.systemPink
-                return annotationView
+                annotationView.pinTintColor = UIColor.systemPink // set the pin tint color as pink
+                return annotationView // return annotation
             case "B":
-                annotationView.pinTintColor = UIColor.orange
-                return annotationView
+                annotationView.pinTintColor = UIColor.orange  // set the pin tint color as orange
+                return annotationView // return annotation
             case "C":
-                annotationView.pinTintColor = UIColor.cyan
-                return annotationView
-//        case "Distance":
-//                let annotationViewCustom =  MKPinAnnotationView(annotation: annotation, reuseIdentifier: "droppablePin" + annotation.title!!)
-//            annotationView.animatesDrop = true
-//            annotationView.canShowCallout = true
-//            annotationView.addSubview(T##view: UIView##UIView)
-//                return annotationViewCustom
+                annotationView.pinTintColor = UIColor.cyan  // set the pin tint color as cyan
+                return annotationView // return annotation
             default:
                 return nil
         }
     }
+    
     // Callout accessory control tapped
     func mapView(_ mapView: MKMapView, annotationView view: MKAnnotationView, calloutAccessoryControlTapped control: UIControl) {
-        let index = getIndexByLetter(letterSearch: view.annotation!.title! ?? "")
-        
-        if index > -1 {
+        let index = getIndexByLetter(letterSearch: view.annotation!.title! ?? "") // get the index in the points array depending on the annotation title
+        if index > -1 { // if the point was found
+            // create the alert
             let alertController = UIAlertController(title: "Distance to current location" , message: String(format: "%2.f", points[index].distanceToLocation) + " km", preferredStyle: .alert)
-            let cancelAction = UIAlertAction(title: "OK", style: .cancel, handler: nil)
-            alertController.addAction(cancelAction)
-            present(alertController, animated: true, completion: nil)
+            let cancelAction = UIAlertAction(title: "OK", style: .cancel, handler: nil) // create the dismiss button
+            alertController.addAction(cancelAction) // add the button to the alert
+            present(alertController, animated: true, completion: nil) //show the alert
         }
 
     }
     // Rendrer for overlay func
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-        if overlay is MKPolyline {
-            let renderer = MKPolylineRenderer(overlay: overlay)
-            renderer.strokeColor = UIColor.purple
-            renderer.lineWidth = 1
-
-            return renderer
-        } else if overlay is MKPolygon {
-            let renderer = MKPolygonRenderer(overlay: overlay)
-            renderer.fillColor = UIColor.red.withAlphaComponent(0.5)
-            renderer.strokeColor = UIColor.green
-            renderer.lineWidth = 2
-            return renderer
+        if overlay is MKPolyline { // if the overlay is a polyline
+            let renderer = MKPolylineRenderer(overlay: overlay) // get the polyline renderer
+            renderer.strokeColor = UIColor.purple // set the stroke color as purple
+            renderer.lineWidth = 1 // set the line width as 1
+            return renderer // return renderer
+        } else if overlay is MKPolygon { // if the overlay is a polygon
+            let renderer = MKPolygonRenderer(overlay: overlay)  // get the polygon renderer
+            renderer.fillColor = UIColor.red.withAlphaComponent(0.5) // set the fill color as red with a transparency of 50%
+            renderer.strokeColor = UIColor.green // set the stroke color as green
+            renderer.lineWidth = 2 // set the line width as 1
+            return renderer // return renderer
         }
-        // return default
-        return MKOverlayRenderer()
+        return MKOverlayRenderer() // return default
     }
     
 }
