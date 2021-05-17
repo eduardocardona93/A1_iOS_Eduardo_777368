@@ -136,7 +136,7 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
                         alert.addAction(UIAlertAction(title: "OK", style: UIAlertAction.Style.default, handler: nil))
                         self.present(alert, animated: true, completion: nil)
                    }else{
-                        let closerLocation = self.checkPointCloserToAnother(newCoordinate: coordinate) // gets the index of a pinned point if the new point is 3Km or closer
+                        let closerLocation = self.checkPointCloserToAnother(newCoordinate: coordinate) // gets the index of a pinned point if the new point is 2Km or closer
                         if closerLocation > -1 { // validates if the placemark coordinates are closer to an existing pinned point coordinates
                             
                             self.removePin(title: self.points[closerLocation].letter) // removes the pin from the map
@@ -272,15 +272,27 @@ extension ViewController: MKMapViewDelegate {
         switch annotation.title {
             case "A":
                 annotationView.pinTintColor = UIColor.systemPink // set the pin tint color as pink
-                return annotationView // return annotation
+                return annotationView // return annotation view
             case "B":
                 annotationView.pinTintColor = UIColor.orange  // set the pin tint color as orange
-                return annotationView // return annotation
+                return annotationView // return annotation view
             case "C":
                 annotationView.pinTintColor = UIColor.cyan  // set the pin tint color as cyan
-                return annotationView // return annotation
+                return annotationView // return annotation view
+        case "Distance":
+            let annotationViewCustom = mapKit.dequeueReusableAnnotationView(withIdentifier: "customPin") ?? MKPinAnnotationView() // create a custom annotation
+            annotationViewCustom.frame = CGRect(x: 0, y: 0, width: 100, height: 20) // define the frame
+            annotationViewCustom.canShowCallout = false // set false can show callout
+            let img = UIImageView(frame: CGRect(x: 0, y: 0, width: 80, height: 20)) //creates an image view with a frame
+            img.backgroundColor = UIColor.lightGray // sets the background color
+             let name  = UILabel(frame: CGRect(x: 0, y: 0, width: 80, height: 20)) // creates a label
+            name.text = annotation.subtitle as? String // sets the
+            name.font = name.font.withSize(10.0) // sets font size
+            annotationViewCustom.addSubview(img) // add the image to the annotationview
+            annotationViewCustom.addSubview(name) // add the label to the annotationview
+                return annotationViewCustom // return annotation view
             default:
-                return nil
+                return nil // returns nothing
         }
     }
     
