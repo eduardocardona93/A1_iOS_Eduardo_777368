@@ -50,13 +50,8 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
     @IBAction func drawRoute(_ sender: Any) {
         mapKit.removeOverlays(mapKit.overlays) // removes all the overlays
         locationsPolygon = nil // resets the polygon
-        // iterates all the annotations
-        for ann in mapKit.annotations{
-            if ann.title == "Distance"{ // validates if it is a distance annotation
-                mapKit.removeAnnotation(ann) // removes the distance annotation
-            }
-        }
-
+       
+        removePin(title: "Distance")  // removes all the distance annotations
         for (index, point) in points.enumerated(){ // iterates all the pinned points
             let sourcePlaceMark = MKPlacemark(coordinate: point.coordinates) // gets the origin placemark with the point coordinates
             var nextPointIndex:Int = index + 1 // gets the next pinned point
@@ -138,7 +133,7 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
                    }else{
                         let closerLocation = self.checkPointCloserToAnother(newCoordinate: coordinate) // gets the index of a pinned point if the new point is 2Km or closer
                         if closerLocation > -1 { // validates if the placemark coordinates are closer to an existing pinned point coordinates
-                            
+                            self.removePin(title: "Distance")  // removes all the distance annotations
                             self.removePin(title: self.points[closerLocation].letter) // removes the pin from the map
                             self.points.remove(at: closerLocation) // removes the pinned point from the global array
                             self.mapKit.removeOverlays(self.mapKit.overlays) // remove overlays
@@ -170,6 +165,7 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
                                 
                                 
                             }
+                            self.removePin(title: "Distance")  // removes all the distance annotations
                             for point in self.locationsLabels{ // iterate the points labels array
                                 let index = self.getIndexByLetter(letterSearch: point) // gets the index if the point is already set
                                 if index == -1 { // if not set
