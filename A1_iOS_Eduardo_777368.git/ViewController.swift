@@ -85,6 +85,7 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
         let touchPoint = sender.location(in: mapKit) // gets the point touched in the map
         let coordinate = mapKit.convert(touchPoint, toCoordinateFrom: mapKit) // gets the coordinates
         
+        
         getLocation(coordinate: coordinate)
         
     }
